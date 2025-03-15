@@ -1,98 +1,160 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Application météo{% endblock %}
+{% block title %}Hello DefaultController!
+{% endblock %}
 
 {% block body %}
+	<form class="weatherForm">
+		<input type="text" placeholder="Entrer la ville" class="cityInput">
+		<button type="submit">Obtenir la météo</button>
+	</form>
 
-  <form class="weatherForm">
-        <input type="text" placeholder="Entrer la ville" class="cityInput">
-        <button type="submit">Obtenir la météo</button>
-    </form>
+	<div class="card" style="display: none;"></div>
 
-    <div class="card" style="display: none;">
-      
-    </div>
+	<script>
+		const weatherForm = document.querySelector(".weatherForm");
+const cityInput = document.querySelector(".cityInput");
+const card = document.querySelector(".card");
+const apiKey = "f5f93bc25d2542a76e41a07320ea6c41";
 
-<script>
-     const weatherForm = document.querySelector(".weatherForm")
-const cityInput =document.querySelector(".cityInput")
-const card = document.querySelector(".card")
-const apiKey = "f9a193941392ff5f95501cc6eb4aa952";
+weatherForm.addEventListener("submit", async (event) => {
+event.preventDefault();
+const city = cityInput.value;
 
-weatherForm.addEventListener("submit",async event =>{
-    event.preventDefault();
-
-    const city = cityInput.value;
-
-    if(city){
-       try{
-          const weatherData = await getWeatherData(city);
-          displayWeatherInfo(weatherData);
-       }
-        catch(error){
-          console.error(error);
-          displayError(error);
-        }
-      
-      }
-    
-
-    else {
-      displayError("Veuillez entrer une ville !")
-    }
-})
+if (city) {
+try {
+const weatherData = await getWeatherData(city);
+displayWeatherInfo(weatherData);
+} catch (error) {
+console.error(error);
+displayError(error.message);
+}
+} else {
+displayError("Veuillez entrer une ville !");
+}
+});
 
 async function getWeatherData(city) {
-  const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}`;
-  
-  const response =  await fetch(apiUrl)
-  console.log(response)
+const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}`;
+const response = await fetch(apiUrl);
 
-  if (!response.ok){
-    throw new error("Impossible de récupérer les données météo")
-  }
-   
-    return await response.json();
+if (! response.ok) {
+throw new Error("Impossible de récupérer les données météo");
 }
 
-function displayWeatherInfo(data){
-    const { name : city,
-            main :{temp,humidity},
-            weather :[{description,id}]} = data;
-            
-    card.textContent="";
-    card.style.display="flex"; 
-
-    const cityDisplay = document.createElement("h1");
-    const tempDisplay = document.createElement("p");
-    const humidityDisplay = document.createElement("p");
-    const descDisplay = document.createElement("p");
-
-    cityDisplay.textContent = city;
-    tempDisplay.textContent = `${(temp - 273.15).toFixed(1)}°C`;
-    humidityDisplay.textContent =`Humidité : ${humidity}%`;      
-    descDisplay.textContent = description;
-
-    cityDisplay.classList.add("cityDisplay");
-    tempDisplay.classList.add("tempDisplay")
-    humidityDisplay.classList.add("humidityDisplay")
-    descDisplay.classList.add("descDisplay");
-
-    card.appendChild(cityDisplay);
-    card.appendChild(tempDisplay)
-    card.appendChild(humidityDisplay)
-    card.appendChild(descDisplay);
+const data = await response.json();
+console.log("API Response:", data); // Debugging
+return data;
 }
 
-function displayError(message){
-    const errorDisplay = document.createElement("p");
-    errorDisplay.textContent = message;
-    errorDisplay.classList.add("errorDisplay");
+function displayWeatherInfo(data) {
+const city = data.city.name; // Get city name from the forecast response
+const firstForecast = data.list[0]; // Use the first forecast for current weather
 
-    card.textContent="";
-    card.style.display="flex";
-    card.appendChild(errorDisplay)
+if (! firstForecast || ! firstForecast.main || ! firstForecast.weather) {
+throw new Error("Données météo invalides");
 }
-</script>
 
+const {temp, humidity} = firstForecast.main;
+const {description} = firstForecast.weather[0];
+
+card.textContent = "";
+card.style.display = "flex";
+
+const cityDisplay = document.createElement("h1");
+const tempDisplay = document.createElement("p");
+const humidityDisplay = document.createElement("p");
+const descDisplay = document.createElement("p");
+
+cityDisplay.textContent = city;
+tempDisplay.textContent = `${
+(temp - 273.15).toFixed(1)
+}°C`;
+humidityDisplay.textContent = `Humidité : ${humidity}%`;
+descDisplay.textContent = description;
+
+cityDisplay.classList.add("cityDisplay");
+tempDisplay.classList.add("tempDisplay");
+humidityDisplay.classList.add("humidityDisplay");
+descDisplay.classList.add("descDisplay");
+
+card.appendChild(cityDisplay);
+card.appendChild(tempDisplay);
+card.appendChild(humidityDisplay);
+card.appendChild(descDisplay);
+
+// Display weekly forecast
+displayWeeklyForecast(data);
+}
+
+function displayWeeklyForecast(data) {
+const forecastContainer = document.createElement("div");
+forecastContainer.classList.add("forecast-container");
+
+// Group forecast data by day
+const dailyForecast = {};
+data.list.forEach((item) => {
+const date = new Date(item.dt * 1000).toLocaleDateString("fr-FR", {weekday: "long"});
+if (! dailyForecast[date]) {
+dailyForecast[date] = {
+temp_min: item.main.temp_min,
+temp_max: item.main.temp_max,
+description: item.weather[0].description,
+icon: item.weather[0].icon
+};
+} else { // Update min and max temperatures for the day
+if (item.main.temp_min<dailyForecast[date].temp_min) {
+            dailyForecast[date].temp_min = item.main.temp_min;
+          }
+          if (item.main.temp_max>dailyForecast[date].temp_max) {
+dailyForecast[date].temp_max = item.main.temp_max;
+}
+}
+});
+
+// Display the forecast for each day
+Object.keys(dailyForecast).forEach((day) => {
+const dayForecast = dailyForecast[day];
+const forecastCard = document.createElement("div");
+forecastCard.classList.add("forecast-card");
+
+const dayDisplay = document.createElement("p");
+dayDisplay.textContent = day;
+
+const tempDisplay = document.createElement("p");
+tempDisplay.textContent = `Min: ${
+(dayForecast.temp_min - 273.15).toFixed(1)
+}°C / Max: ${
+(dayForecast.temp_max - 273.15).toFixed(1)
+}°C`;
+
+const descDisplay = document.createElement("p");
+descDisplay.textContent = dayForecast.description;
+
+const iconDisplay = document.createElement("img");
+iconDisplay.src = `https://openweathermap.org/img/wn/${
+dayForecast.icon
+}.png`;
+iconDisplay.alt = dayForecast.description;
+
+forecastCard.appendChild(dayDisplay);
+forecastCard.appendChild(tempDisplay);
+forecastCard.appendChild(descDisplay);
+forecastCard.appendChild(iconDisplay);
+forecastContainer.appendChild(forecastCard);
+});
+
+card.appendChild(forecastContainer);
+}
+
+function displayError(message) {
+const errorDisplay = document.createElement("p");
+errorDisplay.textContent = message;
+errorDisplay.classList.add("errorDisplay");
+
+card.textContent = "";
+card.style.display = "flex";
+card.appendChild(errorDisplay);
+}
+	</script>
 {% endblock %}
