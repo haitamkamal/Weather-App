@@ -4,18 +4,35 @@
 {% endblock %}
 
 {% block body %}
-	<form class="weatherForm">
-		<input type="text" placeholder="Entrer la ville" class="cityInput">
-		<button type="submit">Obtenir la météo</button>
-	</form>
+	<div
+		class="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+		<!-- Form -->
+		<form class="bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md transform transition-all duration-500 hover:scale-105">
+			<input type="text" placeholder="Entrer la ville" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-white placeholder-gray-400">
+			<button type="submit" class="w-full mt-6 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105">
+				Obtenir la météo
+			</button>
+		</form>
 
-	<div class="card" style="display: none;"></div>
+		<!-- Weather Card -->
+		<div class="mt-8 bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md hidden transform transition-all duration-500 hover:scale-105" id="weatherCard"></div>
 
+		<!-- Graph Container -->
+		<div class="mt-8 w-full max-w-3xl hidden" id="chartContainer">
+			<canvas id="weatherChart"></canvas>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script>
-		const weatherForm = document.querySelector(".weatherForm");
-const cityInput = document.querySelector(".cityInput");
-const card = document.querySelector(".card");
+		const weatherForm = document.querySelector("form");
+const cityInput = document.querySelector("input");
+const weatherCard = document.getElementById("weatherCard");
+const chartContainer = document.getElementById("chartContainer");
+const weatherChartCanvas = document.getElementById("weatherChart");
+
 const apiKey = "f5f93bc25d2542a76e41a07320ea6c41";
+let weatherChart = null; // Variable to store the Chart instance
 
 weatherForm.addEventListener("submit", async (event) => {
 event.preventDefault();
@@ -25,6 +42,7 @@ if (city) {
 try {
 const weatherData = await getWeatherData(city);
 displayWeatherInfo(weatherData);
+displayWeatherChart(weatherData); // Display the graph
 } catch (error) {
 console.error(error);
 displayError(error.message);
@@ -58,8 +76,9 @@ throw new Error("Données météo invalides");
 const {temp, humidity} = firstForecast.main;
 const {description} = firstForecast.weather[0];
 
-card.textContent = "";
-card.style.display = "flex";
+weatherCard.textContent = "";
+weatherCard.classList.remove("hidden");
+weatherCard.classList.add("flex", "flex-col", "space-y-6", "animate-fadeIn");
 
 const cityDisplay = document.createElement("h1");
 const tempDisplay = document.createElement("p");
@@ -67,21 +86,23 @@ const humidityDisplay = document.createElement("p");
 const descDisplay = document.createElement("p");
 
 cityDisplay.textContent = city;
+cityDisplay.classList.add("text-3xl", "font-bold", "text-white", "animate-slideInDown");
+
 tempDisplay.textContent = `${
 (temp - 273.15).toFixed(1)
 }°C`;
+tempDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInLeft");
+
 humidityDisplay.textContent = `Humidité : ${humidity}%`;
+humidityDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInRight");
+
 descDisplay.textContent = description;
+descDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInUp");
 
-cityDisplay.classList.add("cityDisplay");
-tempDisplay.classList.add("tempDisplay");
-humidityDisplay.classList.add("humidityDisplay");
-descDisplay.classList.add("descDisplay");
-
-card.appendChild(cityDisplay);
-card.appendChild(tempDisplay);
-card.appendChild(humidityDisplay);
-card.appendChild(descDisplay);
+weatherCard.appendChild(cityDisplay);
+weatherCard.appendChild(tempDisplay);
+weatherCard.appendChild(humidityDisplay);
+weatherCard.appendChild(descDisplay);
 
 // Display weekly forecast
 displayWeeklyForecast(data);
@@ -89,7 +110,7 @@ displayWeeklyForecast(data);
 
 function displayWeeklyForecast(data) {
 const forecastContainer = document.createElement("div");
-forecastContainer.classList.add("forecast-container");
+forecastContainer.classList.add("space-y-6");
 
 // Group forecast data by day
 const dailyForecast = {};
@@ -104,9 +125,9 @@ icon: item.weather[0].icon
 };
 } else { // Update min and max temperatures for the day
 if (item.main.temp_min<dailyForecast[date].temp_min) {
-            dailyForecast[date].temp_min = item.main.temp_min;
-          }
-          if (item.main.temp_max>dailyForecast[date].temp_max) {
+                        dailyForecast[date].temp_min = item.main.temp_min;
+                    }
+                    if (item.main.temp_max>dailyForecast[date].temp_max) {
 dailyForecast[date].temp_max = item.main.temp_max;
 }
 }
@@ -116,10 +137,11 @@ dailyForecast[date].temp_max = item.main.temp_max;
 Object.keys(dailyForecast).forEach((day) => {
 const dayForecast = dailyForecast[day];
 const forecastCard = document.createElement("div");
-forecastCard.classList.add("forecast-card");
+forecastCard.classList.add("bg-gray-700", "p-6", "rounded-lg", "shadow-md", "transform", "transition-all", "duration-300", "hover:scale-105");
 
 const dayDisplay = document.createElement("p");
 dayDisplay.textContent = day;
+dayDisplay.classList.add("text-2xl", "font-semibold", "text-white", "animate-slideInDown");
 
 const tempDisplay = document.createElement("p");
 tempDisplay.textContent = `Min: ${
@@ -127,15 +149,18 @@ tempDisplay.textContent = `Min: ${
 }°C / Max: ${
 (dayForecast.temp_max - 273.15).toFixed(1)
 }°C`;
+tempDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInLeft");
 
 const descDisplay = document.createElement("p");
 descDisplay.textContent = dayForecast.description;
+descDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInRight");
 
 const iconDisplay = document.createElement("img");
 iconDisplay.src = `https://openweathermap.org/img/wn/${
 dayForecast.icon
 }.png`;
 iconDisplay.alt = dayForecast.description;
+iconDisplay.classList.add("w-12", "h-12", "animate-spin");
 
 forecastCard.appendChild(dayDisplay);
 forecastCard.appendChild(tempDisplay);
@@ -144,17 +169,71 @@ forecastCard.appendChild(iconDisplay);
 forecastContainer.appendChild(forecastCard);
 });
 
-card.appendChild(forecastContainer);
+weatherCard.appendChild(forecastContainer);
+}
+
+function displayWeatherChart(data) { // Extract time and temperature data from the API response
+const labels = data.list.map(item => new Date(item.dt * 1000).toLocaleTimeString("fr-FR", {
+hour: "2-digit",
+minute: "2-digit"
+}));
+const temperatures = data.list.map(item => (item.main.temp - 273.15).toFixed(1));
+
+// Destroy the previous chart instance if it exists
+if (weatherChart) {
+weatherChart.destroy();
+}
+
+// Show the chart container
+chartContainer.classList.remove("hidden");
+chartContainer.classList.add("animate-fadeIn");
+
+// Create the chart
+weatherChart = new Chart(weatherChartCanvas, {
+type: "line",
+data: {
+labels: labels,
+datasets: [
+{
+label: "Température (°C)",
+data: temperatures,
+borderColor: "rgba(75, 192, 192, 1)",
+backgroundColor: "rgba(75, 192, 192, 0.2)",
+fill: true,
+tension: 0.4
+}
+]
+},
+options: {
+scales: {
+y: {
+beginAtZero: false,
+title: {
+display: true,
+text: "Température (°C)"
+}
+},
+x: {
+title: {
+display: true,
+text: "Heure"
+}
+}
+},
+responsive: true,
+maintainAspectRatio: false
+}
+});
 }
 
 function displayError(message) {
 const errorDisplay = document.createElement("p");
 errorDisplay.textContent = message;
-errorDisplay.classList.add("errorDisplay");
+errorDisplay.classList.add("text-red-500", "text-xl", "font-semibold", "animate-bounce");
 
-card.textContent = "";
-card.style.display = "flex";
-card.appendChild(errorDisplay);
+weatherCard.textContent = "";
+weatherCard.classList.remove("hidden");
+weatherCard.appendChild(errorDisplay);
 }
 	</script>
 {% endblock %}
