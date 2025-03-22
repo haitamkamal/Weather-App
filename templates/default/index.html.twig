@@ -8,9 +8,16 @@
 		class="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
 		<!-- Form -->
 		<form class="bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md transform transition-all duration-500 hover:scale-105">
-			<input type="text" placeholder="Entrer la ville" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-white placeholder-gray-400">
-			<button type="submit" class="w-full mt-6 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105">
-				Obtenir la météo
+			<div class="relative">
+				<input type="text" id="cityInput" placeholder="Entrer la ville" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-white placeholder-gray-400">
+				<div id="autocompleteResults" class="absolute z-10 w-full bg-gray-700 rounded-lg mt-2 hidden"></div>
+			</div>
+			<button type="submit" class="w-full mt-6 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105 flex items-center justify-center">
+				<span id="submitText">Obtenir la météo</span>
+				<svg id="loadingSpinner" class="hidden w-5 h-5 ml-2 animate-spin" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
 			</button>
 		</form>
 
@@ -26,26 +33,97 @@
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script>
 		const weatherForm = document.querySelector("form");
-const cityInput = document.querySelector("input");
+const cityInput = document.getElementById("cityInput");
+const autocompleteResults = document.getElementById("autocompleteResults");
 const weatherCard = document.getElementById("weatherCard");
 const chartContainer = document.getElementById("chartContainer");
 const weatherChartCanvas = document.getElementById("weatherChart");
+const submitText = document.getElementById("submitText");
+const loadingSpinner = document.getElementById("loadingSpinner");
 
 const apiKey = "f5f93bc25d2542a76e41a07320ea6c41";
-let weatherChart = null; // Variable to store the Chart instance
+let weatherChart = null;
+// Variable to store the Chart instance
+
+// Debounce function to limit API calls
+function debounce(func, delay) {
+let timeout;
+return function (...args) {
+clearTimeout(timeout);
+timeout = setTimeout(() => func.apply(this, args), delay);
+};
+}
+
+// Fetch city suggestions from OpenWeatherMap API
+async function fetchCitySuggestions(query) {
+const apiUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=5&appid=${apiKey}`;
+const response = await fetch(apiUrl);
+
+if (! response.ok) {
+throw new Error("Impossible de récupérer les suggestions de ville");
+}
+
+const data = await response.json();
+return data;
+}
+
+// Display autocomplete results
+function displayAutocompleteResults(results) {
+autocompleteResults.innerHTML = "";
+if (results.length > 0) {
+results.forEach(result => {
+const suggestion = document.createElement("div");
+suggestion.textContent = `${
+result.name
+}, ${
+result.country
+}`;
+suggestion.classList.add("p-2", "hover:bg-gray-600", "cursor-pointer", "rounded-lg");
+suggestion.addEventListener("click", () => {
+cityInput.value = result.name;
+autocompleteResults.classList.add("hidden");
+});
+autocompleteResults.appendChild(suggestion);
+});
+autocompleteResults.classList.remove("hidden");
+} else {
+autocompleteResults.classList.add("hidden");
+}
+}
+
+// Handle city input changes
+cityInput.addEventListener("input", debounce(async (event) => {
+const query = event.target.value.trim();
+if (query.length >= 3) { // Only fetch suggestions after 3 characters
+try {
+const results = await fetchCitySuggestions(query);
+displayAutocompleteResults(results);
+} catch (error) {
+console.error(error);
+}
+} else {
+autocompleteResults.classList.add("hidden");
+}
+}, 300));
 
 weatherForm.addEventListener("submit", async (event) => {
 event.preventDefault();
 const city = cityInput.value;
 
 if (city) {
-try {
+try { // Show loading state
+submitText.textContent = "Recherche en cours...";
+loadingSpinner.classList.remove("hidden");
+
 const weatherData = await getWeatherData(city);
 displayWeatherInfo(weatherData);
 displayWeatherChart(weatherData); // Display the graph
 } catch (error) {
 console.error(error);
 displayError(error.message);
+} finally { // Reset loading state
+submitText.textContent = "Obtenir la météo";
+loadingSpinner.classList.add("hidden");
 }
 } else {
 displayError("Veuillez entrer une ville !");
@@ -73,8 +151,9 @@ if (! firstForecast || ! firstForecast.main || ! firstForecast.weather) {
 throw new Error("Données météo invalides");
 }
 
-const {temp, humidity} = firstForecast.main;
-const {description} = firstForecast.weather[0];
+const {temp, humidity, pressure} = firstForecast.main;
+const {description, icon} = firstForecast.weather[0];
+const windSpeed = firstForecast.wind.speed;
 
 weatherCard.textContent = "";
 weatherCard.classList.remove("hidden");
@@ -83,7 +162,10 @@ weatherCard.classList.add("flex", "flex-col", "space-y-6", "animate-fadeIn");
 const cityDisplay = document.createElement("h1");
 const tempDisplay = document.createElement("p");
 const humidityDisplay = document.createElement("p");
+const pressureDisplay = document.createElement("p");
+const windDisplay = document.createElement("p");
 const descDisplay = document.createElement("p");
+const iconDisplay = document.createElement("img");
 
 cityDisplay.textContent = city;
 cityDisplay.classList.add("text-3xl", "font-bold", "text-white", "animate-slideInDown");
@@ -96,12 +178,25 @@ tempDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInLeft");
 humidityDisplay.textContent = `Humidité : ${humidity}%`;
 humidityDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInRight");
 
+pressureDisplay.textContent = `Pression : ${pressure} hPa`;
+pressureDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInLeft");
+
+windDisplay.textContent = `Vent : ${windSpeed} m/s`;
+windDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInRight");
+
 descDisplay.textContent = description;
 descDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInUp");
 
+iconDisplay.src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
+iconDisplay.alt = description;
+iconDisplay.classList.add("w-16", "h-16", "mb-4");
+
 weatherCard.appendChild(cityDisplay);
+weatherCard.appendChild(iconDisplay);
 weatherCard.appendChild(tempDisplay);
 weatherCard.appendChild(humidityDisplay);
+weatherCard.appendChild(pressureDisplay);
+weatherCard.appendChild(windDisplay);
 weatherCard.appendChild(descDisplay);
 
 // Display weekly forecast
@@ -110,7 +205,8 @@ displayWeeklyForecast(data);
 
 function displayWeeklyForecast(data) {
 const forecastContainer = document.createElement("div");
-forecastContainer.classList.add("space-y-6");
+forecastContainer.classList.add("flex", "overflow-x-auto", "space-x-4", "py-4");
+<!-- Horizontal layout -->
 
 // Group forecast data by day
 const dailyForecast = {};
@@ -137,7 +233,7 @@ dailyForecast[date].temp_max = item.main.temp_max;
 Object.keys(dailyForecast).forEach((day) => {
 const dayForecast = dailyForecast[day];
 const forecastCard = document.createElement("div");
-forecastCard.classList.add("bg-gray-700", "p-6", "rounded-lg", "shadow-md", "transform", "transition-all", "duration-300", "hover:scale-105");
+forecastCard.classList.add("bg-gray-700", "p-6", "rounded-lg", "shadow-md", "transform", "transition-all", "duration-300", "hover:scale-105", "flex-shrink-0", "w-48", "flex", "flex-col", "items-center"); <!-- Center align items -->
 
 const dayDisplay = document.createElement("p");
 dayDisplay.textContent = day;
@@ -158,14 +254,14 @@ descDisplay.classList.add("text-xl", "text-gray-300", "animate-slideInRight");
 const iconDisplay = document.createElement("img");
 iconDisplay.src = `https://openweathermap.org/img/wn/${
 dayForecast.icon
-}.png`;
+}@2x.png`; <!-- Use @2x for higher resolution -->
 iconDisplay.alt = dayForecast.description;
-iconDisplay.classList.add("w-12", "h-12", "animate-spin");
+iconDisplay.classList.add("w-16", "h-16", "mb-4"); <!-- Adjust icon size and spacing -->
 
+forecastCard.appendChild(iconDisplay); <!-- Add icon first -->
 forecastCard.appendChild(dayDisplay);
 forecastCard.appendChild(tempDisplay);
 forecastCard.appendChild(descDisplay);
-forecastCard.appendChild(iconDisplay);
 forecastContainer.appendChild(forecastCard);
 });
 
@@ -188,6 +284,12 @@ weatherChart.destroy();
 chartContainer.classList.remove("hidden");
 chartContainer.classList.add("animate-fadeIn");
 
+// Create a gradient for the chart background
+const ctx = weatherChartCanvas.getContext("2d");
+const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+gradient.addColorStop(0, "rgba(75, 192, 192, 0.6)");
+gradient.addColorStop(1, "rgba(75, 192, 192, 0.1)");
+
 // Create the chart
 weatherChart = new Chart(weatherChartCanvas, {
 type: "line",
@@ -198,9 +300,13 @@ datasets: [
 label: "Température (°C)",
 data: temperatures,
 borderColor: "rgba(75, 192, 192, 1)",
-backgroundColor: "rgba(75, 192, 192, 0.2)",
+backgroundColor: gradient, // Use gradient background
 fill: true,
-tension: 0.4
+tension: 0.4, // Smooth line
+pointRadius: 5, // Increase point size
+pointBackgroundColor: "rgba(75, 192, 192, 1)",
+pointBorderColor: "#fff",
+pointHoverRadius: 7, // Increase point size on hover
 }
 ]
 },
@@ -210,18 +316,51 @@ y: {
 beginAtZero: false,
 title: {
 display: true,
-text: "Température (°C)"
+text: "Température (°C)",
+color: "#fff", // White text for axis title
+font: {
+size: 14,
+weight: "bold"
+}
+},
+grid: {
+color: "rgba(255, 255, 255, 0.1)" // Light grid lines
+},
+ticks: {
+color: "#fff" // White text for ticks
 }
 },
 x: {
 title: {
 display: true,
-text: "Heure"
+text: "Heure",
+color: "#fff", // White text for axis title
+font: {
+size: 14,
+weight: "bold"
+}
+},
+grid: {
+color: "rgba(255, 255, 255, 0.1)" // Light grid lines
+},
+ticks: {
+color: "#fff" // White text for ticks
+}
+}
+},
+plugins: {
+legend: {
+labels: {
+color: "#fff" // White text for legend
 }
 }
 },
 responsive: true,
-maintainAspectRatio: false
+maintainAspectRatio: false,
+animation: {
+duration: 1000, // Smooth animation
+easing: "easeInOutQuad"
+}
 }
 });
 }
